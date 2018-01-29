@@ -27,112 +27,133 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * 词法解析器.
- * 
- * @author zhangliang 
+ *
+ * @author zhangliang
  */
 @RequiredArgsConstructor
 public class Lexer {
-    
+
+    //输出字符串，比如SQL
     @Getter
     private final String input;
-    
+
+    //词法标记字段
     private final Dictionary dictionary;
-    
+
+    //解析 sql 的offset
     private int offset;
-    
+
+    //当前 词法标记
     @Getter
     private Token currentToken;
-    
+
     /**
      * 分析下一个词法标记.
      */
     public final void nextToken() {
         skipIgnoredToken();
-        if (isVariableBegin()) {
+        if (isVariableBegin()) { //变量
             currentToken = new Tokenizer(input, dictionary, offset).scanVariable();
-        } else if (isNCharBegin()) {
+        } else if (isNCharBegin()) { // N\
             currentToken = new Tokenizer(input, dictionary, ++offset).scanChars();
-        } else if (isIdentifierBegin()) {
+        } else if (isIdentifierBegin()) { // Keyword + Literals.IDENTIFIER
             currentToken = new Tokenizer(input, dictionary, offset).scanIdentifier();
-        } else if (isHexDecimalBegin()) {
+        } else if (isHexDecimalBegin()) { // 十六进制
             currentToken = new Tokenizer(input, dictionary, offset).scanHexDecimal();
-        } else if (isNumberBegin()) {
+        } else if (isNumberBegin()) { // 数字（整数+浮点数）
             currentToken = new Tokenizer(input, dictionary, offset).scanNumber();
-        } else if (isSymbolBegin()) {
+        } else if (isSymbolBegin()) { // 符号
             currentToken = new Tokenizer(input, dictionary, offset).scanSymbol();
-        } else if (isCharsBegin()) {
+        } else if (isCharsBegin()) { // 字符串，例如："abc"
             currentToken = new Tokenizer(input, dictionary, offset).scanChars();
-        } else if (isEnd()) {
+        } else if (isEnd()) { // 结束
             currentToken = new Token(Assist.END, "", offset);
-        } else {
+        } else { // 分析错误，无符合条件的词法标记
             currentToken = new Token(Assist.ERROR, "", offset);
         }
         offset = currentToken.getEndPosition();
+
+        //add by tll
+        System.out.println("| " + currentToken.getLiterals() + " | " + currentToken.getType() + " | " + currentToken.getEndPosition() + " |");
+
     }
-    
+
+    /**
+     * 跳过忽略的词法标记
+     *
+     * 1. 空格
+     * 2. SQL Hint
+     * 3. SQL 注释
+     * add by tll
+     */
     private void skipIgnoredToken() {
+        // 空格
         offset = new Tokenizer(input, dictionary, offset).skipWhitespace();
+
+        // SQL Hint
         while (isHintBegin()) {
             offset = new Tokenizer(input, dictionary, offset).skipHint();
             offset = new Tokenizer(input, dictionary, offset).skipWhitespace();
         }
+
+        // SQL 注释
         while (isCommentBegin()) {
             offset = new Tokenizer(input, dictionary, offset).skipComment();
             offset = new Tokenizer(input, dictionary, offset).skipWhitespace();
         }
     }
-    
+
     protected boolean isHintBegin() {
         return false;
     }
-    
+
     protected boolean isCommentBegin() {
         char current = getCurrentChar(0);
         char next = getCurrentChar(1);
         return '/' == current && '/' == next || '-' == current && '-' == next || '/' == current && '*' == next;
     }
-    
+
     protected boolean isVariableBegin() {
         return false;
     }
-    
+
     protected boolean isSupportNChars() {
         return false;
     }
-    
+
     private boolean isNCharBegin() {
         return isSupportNChars() && 'N' == getCurrentChar(0) && '\'' == getCurrentChar(1);
     }
-    
+
     private boolean isIdentifierBegin() {
         return isIdentifierBegin(getCurrentChar(0));
     }
-    
+
     private boolean isIdentifierBegin(final char ch) {
         return CharType.isAlphabet(ch) || '`' == ch || '_' == ch || '$' == ch;
     }
-    
+
     private boolean isHexDecimalBegin() {
         return '0' == getCurrentChar(0) && 'x' == getCurrentChar(1);
     }
-    
+
     private boolean isNumberBegin() {
         return CharType.isDigital(getCurrentChar(0)) || ('.' == getCurrentChar(0) && CharType.isDigital(getCurrentChar(1)) && !isIdentifierBegin(getCurrentChar(-1))
                 || ('-' == getCurrentChar(0) && ('.' == getCurrentChar(0) || CharType.isDigital(getCurrentChar(1)))));
     }
-    
+
     private boolean isSymbolBegin() {
         return CharType.isSymbol(getCurrentChar(0));
     }
-    
+
     private boolean isCharsBegin() {
         return '\'' == getCurrentChar(0) || '\"' == getCurrentChar(0);
     }
-    
+
     private boolean isEnd() {
         return offset >= input.length();
     }
-    
+
     protected final char getCurrentChar(final int offset) {
         return this.offset + offset >= input.length() ? (char) CharType.EOI : input.charAt(this.offset + offset);
     }
